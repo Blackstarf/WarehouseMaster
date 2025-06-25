@@ -1,5 +1,4 @@
-﻿using System;
-using System.Data;
+﻿using System.Data;
 using Npgsql;
 using System.Windows.Input;
 using System.Windows;
@@ -7,19 +6,26 @@ using WarehouseMaster.Core;
 using Microsoft.Win32;
 using Newtonsoft.Json;
 using System.IO;
-using System.ComponentModel;
 
 namespace WarehouseMaster
 {
     public class WorkWindowViewModel : BaseViewModel
     {
-        private readonly string _connectionString;
+        private readonly ITableRepository _repository;
         private DataTable _currentTable;
-        private string _currentViewName;
         private string _currentTableName;
+        private readonly string _connectionString;
+        private string _currentViewName;
         private DataRowView _selectedRow;
         public ICommand ImportFromJsonCommand { get; }
-
+        public ICommand NavigateCommand { get; }
+        public ICommand ExportToJsonCommand { get; }
+        public ICommand RefreshCommand { get; }
+        public ICommand AddCommand { get; }
+        public ICommand EditCommand { get; }
+        public ICommand DeleteCommand { get; }
+        public ICommand SaveCommand { get; }
+        public bool IsRowSelected => SelectedRow != null;
         public DataTable CurrentTable
         {
             get => _currentTable;
@@ -29,7 +35,6 @@ namespace WarehouseMaster
                 OnPropertyChanged();
             }
         }
-
         public string CurrentViewName
         {
             get => _currentViewName;
@@ -51,19 +56,9 @@ namespace WarehouseMaster
             }
         }
 
-        public bool IsRowSelected => SelectedRow != null;
-
-        public ICommand NavigateCommand { get; }
-        public ICommand ExportToJsonCommand { get; }
-        public ICommand RefreshCommand { get; }
-        public ICommand AddCommand { get; }
-        public ICommand EditCommand { get; }
-        public ICommand DeleteCommand { get; }
-        public ICommand SaveCommand { get; }
-
-        public WorkWindowViewModel(string connectionString)
+        public WorkWindowViewModel(ITableRepository repository)
         {
-            _connectionString = connectionString;
+            _repository = repository;
 
             NavigateCommand = new RelayCommand<string>(LoadTableData);
             ExportToJsonCommand = new RelayCommand(ExportToJson);
@@ -75,7 +70,6 @@ namespace WarehouseMaster
             SaveCommand = new RelayCommand(SaveChanges);
             DeleteCommand = new RelayCommand(DeleteRecord, () => IsRowSelected);
 
-            // Подписываемся на изменение свойства SelectedRow
             PropertyChanged += (s, e) =>
             {
                 if (e.PropertyName == nameof(SelectedRow))
@@ -102,7 +96,6 @@ namespace WarehouseMaster
 
                     if (dataTable != null && dataTable.Rows.Count > 0)
                     {
-                        // Проверяем соответствие структуры таблицы
                         if (IsTableStructureCompatible(dataTable))
                         {
                             ImportDataToDatabase(dataTable);
@@ -135,11 +128,9 @@ namespace WarehouseMaster
             if (CurrentTable == null || string.IsNullOrEmpty(_currentTableName))
                 return false;
 
-            // Сравниваем количество столбцов
             if (importedTable.Columns.Count != CurrentTable.Columns.Count)
                 return false;
 
-            // Сравниваем имена столбцов
             foreach (DataColumn column in CurrentTable.Columns)
             {
                 if (!importedTable.Columns.Contains(column.ColumnName))
@@ -151,64 +142,32 @@ namespace WarehouseMaster
 
         private void ImportDataToDatabase(DataTable dataTable)
         {
-            using (var connection = new NpgsqlConnection(_connectionString))
+            try
             {
-                connection.Open();
+                string primaryKey = _repository.GetPrimaryKeyColumn(_currentTableName);
 
-                // Получаем имя первичного ключа
-                string primaryKey = GetPrimaryKeyColumn(_currentTableName);
-
-                using (var transaction = connection.BeginTransaction())
+                foreach (DataRow row in dataTable.Rows)
                 {
-                    try
+                    var newRow = CurrentTable.NewRow();
+
+                    foreach (DataColumn column in dataTable.Columns)
                     {
-                        foreach (DataRow row in dataTable.Rows)
+                        if (!column.ColumnName.Equals(primaryKey, StringComparison.OrdinalIgnoreCase))
                         {
-                            // Создаем команду для вставки
-                            var columnNames = new System.Text.StringBuilder();
-                            var paramNames = new System.Text.StringBuilder();
-
-                            foreach (DataColumn column in dataTable.Columns)
-                            {
-                                // Пропускаем первичный ключ для автоинкрементных полей
-                                if (column.ColumnName.Equals(primaryKey, StringComparison.OrdinalIgnoreCase))
-                                    continue;
-
-                                if (columnNames.Length > 0)
-                                {
-                                    columnNames.Append(", ");
-                                    paramNames.Append(", ");
-                                }
-
-                                columnNames.Append(column.ColumnName);
-                                paramNames.Append($"@{column.ColumnName}");
-                            }
-
-                            var query = $"INSERT INTO {_currentTableName} ({columnNames}) VALUES ({paramNames})";
-
-                            using (var cmd = new NpgsqlCommand(query, connection, transaction))
-                            {
-                                foreach (DataColumn column in dataTable.Columns)
-                                {
-                                    // Пропускаем первичный ключ
-                                    if (column.ColumnName.Equals(primaryKey, StringComparison.OrdinalIgnoreCase))
-                                        continue;
-
-                                    cmd.Parameters.AddWithValue($"@{column.ColumnName}", row[column]);
-                                }
-
-                                cmd.ExecuteNonQuery();
-                            }
+                            newRow[column.ColumnName] = row[column];
                         }
+                    }
 
-                        transaction.Commit();
-                    }
-                    catch
-                    {
-                        transaction.Rollback();
-                        throw;
-                    }
+                    CurrentTable.Rows.Add(newRow);
                 }
+
+                _repository.Update(CurrentTable, _currentTableName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при импорте данных: {ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                throw;
             }
         }
 
@@ -233,21 +192,13 @@ namespace WarehouseMaster
 
             try
             {
-                using (var connection = new NpgsqlConnection(_connectionString))
-                {
-                    connection.Open();
-                    var query = $"SELECT * FROM {_currentTableName} LIMIT 100";
-                    var adapter = new NpgsqlDataAdapter(query, connection);
-
-                    var dataTable = new DataTable();
-                    adapter.Fill(dataTable);
-                    CurrentTable = dataTable;
-                    SelectedRow = null;
-                }
+                CurrentTable = _repository.GetAll(_currentTableName);
+                SelectedRow = null;
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка при обновлении данных: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка при обновлении данных: {ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -267,10 +218,9 @@ namespace WarehouseMaster
             var editWindow = new EditWindow(SelectedRow, _currentTableName);
             if (editWindow.ShowDialog() == true)
             {
-                RefreshData(); // Обновляем данные после редактирования
+                RefreshData();
             }
         }
-
         private void DeleteRecord()
         {
             if (SelectedRow == null) return;
@@ -282,30 +232,16 @@ namespace WarehouseMaster
 
                 if (result == MessageBoxResult.No) return;
 
-                using (var connection = new NpgsqlConnection(_connectionString))
+                string primaryKey = _repository.GetPrimaryKeyColumn(_currentTableName);
+                if (string.IsNullOrEmpty(primaryKey))
                 {
-                    connection.Open();
-
-                    // Получаем имя первичного ключа
-                    string primaryKey = GetPrimaryKeyColumn(_currentTableName);
-
-                    if (string.IsNullOrEmpty(primaryKey))
-                    {
-                        MessageBox.Show("Не удалось определить первичный ключ таблицы", "Ошибка",
-                            MessageBoxButton.OK, MessageBoxImage.Error);
-                        return;
-                    }
-
-                    var id = SelectedRow[primaryKey];
-                    var query = $"DELETE FROM {_currentTableName} WHERE {primaryKey} = @id";
-
-                    using (var cmd = new NpgsqlCommand(query, connection))
-                    {
-                        cmd.Parameters.AddWithValue("id", id);
-                        cmd.ExecuteNonQuery();
-                    }
+                    MessageBox.Show("Не удалось определить первичный ключ таблицы", "Ошибка",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
                 }
 
+                var id = SelectedRow[primaryKey];
+                _repository.Delete((int)id, _currentTableName);
                 RefreshData();
             }
             catch (Exception ex)
@@ -314,43 +250,17 @@ namespace WarehouseMaster
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
         private void SaveChanges()
         {
-            if (CurrentTable == null || string.IsNullOrEmpty(_currentTableName)) return;
+            if (CurrentTable == null || string.IsNullOrEmpty(_currentTableName))
+                return;
 
             try
             {
-                using (var connection = new NpgsqlConnection(_connectionString))
-                {
-                    connection.Open();
-
-                    // Получаем имя первичного ключа
-                    string primaryKey = GetPrimaryKeyColumn(_currentTableName);
-
-                    if (string.IsNullOrEmpty(primaryKey))
-                    {
-                        MessageBox.Show("Не удалось определить первичный ключ таблицы", "Ошибка",
-                            MessageBoxButton.OK, MessageBoxImage.Error);
-                        return;
-                    }
-
-                    // Создаем адаптер с командами для вставки, обновления и удаления
-                    var adapter = new NpgsqlDataAdapter($"SELECT * FROM {_currentTableName}", connection);
-
-                    var builder = new NpgsqlCommandBuilder(adapter);
-                    adapter.InsertCommand = builder.GetInsertCommand();
-                    adapter.UpdateCommand = builder.GetUpdateCommand();
-                    adapter.DeleteCommand = builder.GetDeleteCommand();
-
-                    // Применяем изменения
-                    adapter.Update(CurrentTable);
-
-                    MessageBox.Show("Изменения успешно сохранены", "Успех",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
-
-                    RefreshData();
-                }
+                _repository.Update(CurrentTable, _currentTableName);
+                MessageBox.Show("Изменения успешно сохранены", "Успех",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                RefreshData();
             }
             catch (Exception ex)
             {
@@ -358,57 +268,6 @@ namespace WarehouseMaster
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-        private string GetPrimaryKeyColumn(string tableName)
-        {
-            try
-            {
-                using (var connection = new NpgsqlConnection(_connectionString))
-                {
-                    connection.Open();
-
-                    var query = @"
-                        SELECT a.attname
-                        FROM pg_index i
-                        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-                        WHERE i.indrelid = @tableName::regclass
-                        AND i.indisprimary";
-
-                    using (var cmd = new NpgsqlCommand(query, connection))
-                    {
-                        cmd.Parameters.AddWithValue("tableName", tableName);
-                        return cmd.ExecuteScalar()?.ToString();
-                    }
-                }
-            }
-            catch
-            {
-                return null;
-            }
-        }
-        public class RelayCommand : ICommand
-        {
-            private readonly Action _execute;
-            private readonly Func<bool> _canExecute;
-
-            public event EventHandler CanExecuteChanged;
-
-            public RelayCommand(Action execute, Func<bool> canExecute = null)
-            {
-                _execute = execute ?? throw new ArgumentNullException(nameof(execute));
-                _canExecute = canExecute;
-            }
-
-            public bool CanExecute(object parameter) => _canExecute == null || _canExecute();
-
-            public void Execute(object parameter) => _execute();
-
-            public void RaiseCanExecuteChanged()
-            {
-                CanExecuteChanged?.Invoke(this, EventArgs.Empty);
-            }
-        }
-
         private string GetTableQuery(string viewName)
         {
             return viewName switch
@@ -420,7 +279,7 @@ namespace WarehouseMaster
                 "SuppliesView" => "goods_receipt",
                 "ShipmentsView" => "goods_issue",
                 "UsersView" => "app_user",
-                _ => "product" // default
+                _ => "product" 
             };
         }
 
@@ -467,5 +326,28 @@ namespace WarehouseMaster
                 MessageBox.Show($"Ошибка при экспорте: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+        public class RelayCommand : ICommand
+        {
+            private readonly Action _execute;
+            private readonly Func<bool> _canExecute;
+
+            public event EventHandler CanExecuteChanged;
+
+            public RelayCommand(Action execute, Func<bool> canExecute = null)
+            {
+                _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+                _canExecute = canExecute;
+            }
+
+            public bool CanExecute(object parameter) => _canExecute == null || _canExecute();
+
+            public void Execute(object parameter) => _execute();
+
+            public void RaiseCanExecuteChanged()
+            {
+                CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
     }
+
 }

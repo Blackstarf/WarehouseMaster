@@ -1,9 +1,6 @@
 ﻿using Npgsql;
-using System;
 using System.Windows;
 using System.Windows.Controls;
-using BCrypt.Net;
-using Org.BouncyCastle.Crypto.Generators; // Подключи пакет BCrypt.Net-Next через NuGet
 
 namespace WarehouseMaster
 {
@@ -41,8 +38,7 @@ namespace WarehouseMaster
                 return;
             }
 
-            // Хешируем пароль
-            string passwordHash = BCrypt.Net.BCrypt.HashPassword(password); // Исправлено: использование правильного метода из подключенного пространства имен
+            string passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
 
             string connString = "Host=localhost;Port=5432;Username=postgres;Password=sa;Database=WarehouseMaster;";
 

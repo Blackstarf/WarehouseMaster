@@ -38,8 +38,6 @@
                 <TextBlock Text="Пароль" Margin="0,0,0,5"/>
                 <PasswordBox x:Name="PasswordBox" Height="35" Margin="0,0,0,15"/>
 
-                <CheckBox Content="Запомнить меня" Margin="0,0,0,15"/>
-
                 <Button Content="Войти"
                         Height="40"
                         Click="LoginButton_Click"

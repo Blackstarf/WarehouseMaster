@@ -1,15 +1,17 @@
-﻿using System;
+﻿using Npgsql;
+using System.Configuration;
 using System.Windows;
 using System.Windows.Input;
-using Npgsql;
-using BCrypt.Net;
 
 namespace WarehouseMaster
 {
     public partial class LoginWindow : Window
     {
+        private readonly string _connectionString;
+
         public LoginWindow()
         {
+            _connectionString = "Host=localhost;Port=5432;Username=postgres;Password=sa;Database=WarehouseMaster;";
             InitializeComponent();
         }
 
@@ -20,22 +22,21 @@ namespace WarehouseMaster
 
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
             {
-                MessageBox.Show("Пожалуйста, введите имя пользователя и пароль.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Пожалуйста, введите имя пользователя и пароль.", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            string connString = "Host=localhost;Port=5432;Username=postgres;Password=sa;Database=WarehouseMaster;";
-
             try
             {
-                using (var conn = new NpgsqlConnection(connString))
+                using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     conn.Open();
 
                     string query = @"
-                SELECT user_id, full_name, password_hash, role_id
-                FROM app_user 
-                WHERE username = @username AND status = 'active'";
+                        SELECT user_id, full_name, password_hash, role_id
+                        FROM app_user 
+                        WHERE username = @username AND status = 'active'";
 
                     using (var cmd = new NpgsqlCommand(query, conn))
                     {
@@ -49,26 +50,27 @@ namespace WarehouseMaster
 
                                 if (BCrypt.Net.BCrypt.Verify(password, storedHash))
                                 {
-                                    // Успешный вход
-                                    int userId = Convert.ToInt32(reader["user_id"]);
                                     string fullName = reader["full_name"].ToString();
-                                    int roleId = Convert.ToInt32(reader["role_id"]);
+                                    MessageBox.Show($"Добро пожаловать, {fullName}!", "Успех",
+                                        MessageBoxButton.OK, MessageBoxImage.Information);
 
-                                    MessageBox.Show($"Добро пожаловать, {fullName}!", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
-
-                                    // 👉 Переход в WorkWindow
-                                    WorkWindow workWindow = new WorkWindow(); // можно передать параметры в конструктор
+                                    var connectionString = ConfigurationManager.ConnectionStrings["PostgreSQL"]?.ConnectionString
+                               ?? "Host=localhost;Port=5432;Username=postgres;Password=sa;Database=WarehouseMaster;";
+                                    var tableRepository = new TableRepository();
+                                    WorkWindow workWindow = new WorkWindow(tableRepository);
                                     workWindow.Show();
-                                    this.Close(); // закрываем окно входа
+                                    this.Close();
                                 }
                                 else
                                 {
-                                    MessageBox.Show("Неверный пароль.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                                    MessageBox.Show("Неверный пароль.", "Ошибка",
+                                        MessageBoxButton.OK, MessageBoxImage.Error);
                                 }
                             }
                             else
                             {
-                                MessageBox.Show("Пользователь не найден или отключён.", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                                MessageBox.Show("Пользователь не найден или отключён.", "Ошибка",
+                                    MessageBoxButton.OK, MessageBoxImage.Error);
                             }
                         }
                     }
@@ -76,10 +78,10 @@ namespace WarehouseMaster
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка входа: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка входа: {ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
 
         private void NavigateToRegister_Click(object sender, MouseButtonEventArgs e)
         {

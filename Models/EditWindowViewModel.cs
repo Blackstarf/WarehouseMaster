@@ -1,12 +1,13 @@
-﻿using System;
-using System.Data;
+﻿using Npgsql;
+using System;
 using System.Collections.Generic;
+using System.Configuration;
+using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
-using Npgsql;
 using WarehouseMaster.Core;
-using System.Configuration;
 
 namespace WarehouseMaster
 {
@@ -17,7 +18,6 @@ namespace WarehouseMaster
         private readonly Window _window;
         private string _primaryKey;
 
-        // Изменяем тип на List<KeyValuePair<string, FieldValue>>
         public List<KeyValuePair<string, FieldValue>> Fields { get; }
         public ICommand SaveCommand { get; }
         public ICommand CancelCommand { get; }
@@ -28,21 +28,20 @@ namespace WarehouseMaster
             _tableName = tableName;
             _window = window;
 
-            // Получаем первичный ключ
             _primaryKey = GetPrimaryKeyColumn(tableName);
 
-            // Заполняем поля для редактирования
-            Fields = new List<KeyValuePair<string, FieldValue>>(); // Изменяем тип списка
+            Fields = new List<KeyValuePair<string, FieldValue>>();
             for (int i = 0; i < row.Row.Table.Columns.Count; i++)
             {
                 var column = row.Row.Table.Columns[i];
-                bool isReadOnly = column.ColumnName == _primaryKey; // Первичный ключ нельзя редактировать
+                bool isReadOnly = column.ColumnName == _primaryKey;
 
-                // Создаем FieldValue явно
                 var fieldValue = new FieldValue
                 {
                     Value = row[i]?.ToString(),
-                    IsReadOnly = isReadOnly
+                    IsReadOnly = isReadOnly,
+                    DataType = column.DataType,
+                    ColumnName = column.ColumnName
                 };
 
                 Fields.Add(new KeyValuePair<string, FieldValue>(column.ColumnName, fieldValue));
@@ -56,11 +55,13 @@ namespace WarehouseMaster
         {
             try
             {
-                using (var connection = new NpgsqlConnection(ConfigurationManager.ConnectionStrings["PostgreSQL"].ConnectionString))
+                if (!ValidateFields())
+                    return;
+
+                using (var connection = new NpgsqlConnection(GetConnectionString()))
                 {
                     connection.Open();
 
-                    // Формируем SQL запрос для обновления
                     var setValues = string.Join(", ", Fields
                         .Where(f => !f.Value.IsReadOnly)
                         .Select(f => $"{f.Key} = @{f.Key}"));
@@ -69,32 +70,17 @@ namespace WarehouseMaster
 
                     using (var cmd = new NpgsqlCommand(query, connection))
                     {
-                        // Добавляем параметры
                         foreach (var field in Fields.Where(f => !f.Value.IsReadOnly))
                         {
-                            // Исправляем обработку NULL значений
-                            object value = string.IsNullOrEmpty(field.Value.Value) ? (object)DBNull.Value : field.Value.Value;
-                            cmd.Parameters.AddWithValue(field.Key, value);
+                            cmd.Parameters.AddWithValue(field.Key, ConvertFieldValue(field.Value));
                         }
 
-                        // Добавляем ID для условия WHERE
                         cmd.Parameters.AddWithValue("id", _row[_primaryKey]);
-
                         cmd.ExecuteNonQuery();
                     }
                 }
 
-                // Обновляем исходную строку
-                for (int i = 0; i < _row.Row.Table.Columns.Count; i++)
-                {
-                    var column = _row.Row.Table.Columns[i];
-                    var field = Fields.FirstOrDefault(f => f.Key == column.ColumnName);
-                    if (field.Key != null && !field.Value.IsReadOnly)
-                    {
-                        _row[i] = field.Value.Value ?? DBNull.Value.ToString();
-                    }
-                }
-
+                UpdateOriginalRow();
                 _window.DialogResult = true;
             }
             catch (Exception ex)
@@ -104,11 +90,73 @@ namespace WarehouseMaster
             }
         }
 
+        private bool ValidateFields()
+        {
+            foreach (var field in Fields.Where(f => !f.Value.IsReadOnly))
+            {
+                try
+                {
+                    if (field.Value.DataType == typeof(decimal))
+                    {
+                        if (!string.IsNullOrEmpty(field.Value.Value))
+                        {
+                            decimal.Parse(field.Value.Value, CultureInfo.InvariantCulture);
+                        }
+                    }
+                }
+                catch
+                {
+                    MessageBox.Show($"Некорректное значение в поле {field.Key}. Ожидается числовое значение.",
+                        "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private object ConvertFieldValue(FieldValue field)
+        {
+            if (string.IsNullOrEmpty(field.Value))
+                return DBNull.Value;
+
+            try
+            {
+                return field.DataType.Name switch
+                {
+                    "Decimal" => decimal.Parse(field.Value, CultureInfo.InvariantCulture),
+                    "Int32" => int.Parse(field.Value),
+                    "DateTime" => DateTime.Parse(field.Value),
+                    "Boolean" => bool.Parse(field.Value),
+                    _ => field.Value
+                };
+            }
+            catch
+            {
+                MessageBox.Show($"Невозможно преобразовать значение '{field.Value}' для поля {field.ColumnName}",
+                    "Ошибка формата", MessageBoxButton.OK, MessageBoxImage.Error);
+                throw;
+            }
+        }
+
+        private void UpdateOriginalRow()
+        {
+            for (int i = 0; i < _row.Row.Table.Columns.Count; i++)
+            {
+                var column = _row.Row.Table.Columns[i];
+                var field = Fields.FirstOrDefault(f => f.Key == column.ColumnName);
+
+                if (field.Key != null && !field.Value.IsReadOnly)
+                {
+                    _row[i] = ConvertFieldValue(field.Value) ?? DBNull.Value;
+                }
+            }
+        }
+
         private string GetPrimaryKeyColumn(string tableName)
         {
             try
             {
-                using (var connection = new NpgsqlConnection(ConfigurationManager.ConnectionStrings["PostgreSQL"].ConnectionString))
+                using (var connection = new NpgsqlConnection(GetConnectionString()))
                 {
                     connection.Open();
 
@@ -131,11 +179,19 @@ namespace WarehouseMaster
                 return null;
             }
         }
+
+        private string GetConnectionString()
+        {
+            return ConfigurationManager.ConnectionStrings["PostgreSQL"]?.ConnectionString
+                   ?? "Host=localhost;Port=5432;Username=postgres;Password=sa;Database=WarehouseMaster;";
+        }
     }
 
     public class FieldValue
     {
         public string Value { get; set; }
         public bool IsReadOnly { get; set; }
+        public Type DataType { get; set; }
+        public string ColumnName { get; set; }
     }
 }
