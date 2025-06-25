@@ -1,28 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Configuration;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 
 namespace WarehouseMaster
 {
-    /// <summary>
-    /// Логика взаимодействия для WorkWindow.xaml
-    /// </summary>
     public partial class WorkWindow : Window
     {
+        private readonly string _connectionString;
+        private WorkWindowViewModel _viewModel;
         public WorkWindow()
         {
             InitializeComponent();
 
+            _connectionString = ConfigurationManager.ConnectionStrings["PostgreSQL"]?.ConnectionString
+                               ?? "Host=localhost;Port=5432;Username=postgres;Password=sa;Database=WarehouseMaster;";
+
+            _viewModel = new WorkWindowViewModel(_connectionString);
+            DataContext = _viewModel;
         }
     }
 }

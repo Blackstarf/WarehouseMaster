@@ -1,15 +1,105 @@
 ﻿<Window x:Class="WarehouseMaster.WorkWindow"
-            xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:local="clr-namespace:WarehouseMaster"
-    mc:Ignorable="d"
-    Title="Система управления складом" 
-    Height="768" Width="1024"
-    WindowStartupLocation="CenterScreen"
-    FontFamily="Segoe UI"
-    Background="#FFF0F0F0">
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:WarehouseMaster"
+        mc:Ignorable="d"
+        Title="Система управления складом" 
+        Height="768" Width="1024"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI"
+        Background="#FFF0F0F0">
+
+    <Window.Resources>
+        <!-- Стиль для кнопок навигации -->
+        <Style x:Key="NavButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="10 5"/>
+            <Setter Property="Margin" Value="0 2"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF2C3E50"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Стиль для кнопки выхода -->
+        <Style x:Key="LinkButtonStyle" TargetType="Button">
+            <Setter Property="Foreground" Value="#FF2980B9"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="5"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="#FF3498DB"/>
+                    <Setter Property="TextBlock.TextDecorations" Value="Underline"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Стиль для DataGrid -->
+        <Style x:Key="DataGridStyle" TargetType="DataGrid">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="RowBackground" Value="White"/>
+            <Setter Property="AlternatingRowBackground" Value="#FFF5F5F5"/>
+            <Setter Property="BorderBrush" Value="#FFDDDDDD"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="GridLinesVisibility" Value="None"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="AutoGenerateColumns" Value="True"/>
+            <Setter Property="CanUserAddRows" Value="False"/>
+            <Setter Property="CanUserDeleteRows" Value="False"/>
+            <Setter Property="IsReadOnly" Value="False"/>
+            <Setter Property="SelectionMode" Value="Single"/>
+            <Setter Property="SelectionUnit" Value="FullRow"/>
+            <Setter Property="ColumnHeaderStyle">
+                <Setter.Value>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="#FF2C3E50"/>
+                        <Setter Property="Foreground" Value="White"/>
+                        <Setter Property="Padding" Value="10 5"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Контекстное меню для DataGrid -->
+        <ContextMenu x:Key="DataGridContextMenu">
+            <MenuItem Header="Обновить" Command="{Binding RefreshCommand}"/>
+            <MenuItem Header="Добавить" Command="{Binding AddCommand}"/>
+            <MenuItem Header="Редактировать" Command="{Binding EditCommand}"/>
+            <MenuItem Header="Удалить" Command="{Binding DeleteCommand}"/>
+            <Separator/>
+            <MenuItem Header="Сохранить изменения" Command="{Binding SaveCommand}"/>
+            <Separator/>
+            <MenuItem Header="Экспорт в JSON" Command="{Binding ExportToJsonCommand}"/>
+            <MenuItem Header="Копировать" Command="ApplicationCommands.Copy"/>
+        </ContextMenu>
+    </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -22,10 +112,15 @@
         <Border Grid.Row="0" Background="#FF2C3E50" Padding="10">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="WAREHOUSE MANAGEMENT SYSTEM" 
-                       Foreground="White" 
-                       FontSize="18" 
-                       FontWeight="Bold"
-                       VerticalAlignment="Center"/>
+                           Foreground="White" 
+                           FontSize="18" 
+                           FontWeight="Bold"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding CurrentViewName}" 
+                           Foreground="White"
+                           FontSize="16"
+                           Margin="20 0 0 0"
+                           VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 
@@ -40,46 +135,84 @@
             <Border Grid.Column="0" Background="#FF34495E" Padding="5">
                 <StackPanel>
                     <Button Content="📦 Товары" 
-                        Style="{StaticResource NavButtonStyle}"
-                        Command="{Binding NavigateCommand}" 
-                        CommandParameter="ProductsView"/>
+                            Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding NavigateCommand}" 
+                            CommandParameter="ProductsView"/>
 
                     <Button Content="🏭 Склады" 
-                        Style="{StaticResource NavButtonStyle}"
-                        Command="{Binding NavigateCommand}" 
-                        CommandParameter="WarehousesView"/>
+                            Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding NavigateCommand}" 
+                            CommandParameter="WarehousesView"/>
 
                     <Button Content="📊 Отчёты" 
-                        Style="{StaticResource NavButtonStyle}"
-                        Command="{Binding NavigateCommand}" 
-                        CommandParameter="ReportsView"/>
+                            Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding NavigateCommand}" 
+                            CommandParameter="ReportsView"/>
 
                     <Button Content="🔄 Инвентаризация" 
-                        Style="{StaticResource NavButtonStyle}"
-                        Command="{Binding NavigateCommand}" 
-                        CommandParameter="InventoryView"/>
+                            Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding NavigateCommand}" 
+                            CommandParameter="InventoryView"/>
 
                     <Button Content="🚚 Поставки" 
-                        Style="{StaticResource NavButtonStyle}"
-                        Command="{Binding NavigateCommand}" 
-                        CommandParameter="SuppliesView"/>
+                            Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding NavigateCommand}" 
+                            CommandParameter="SuppliesView"/>
 
                     <Button Content="📦 Отгрузки" 
-                        Style="{StaticResource NavButtonStyle}"
-                        Command="{Binding NavigateCommand}" 
-                        CommandParameter="ShipmentsView"/>
+                            Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding NavigateCommand}" 
+                            CommandParameter="ShipmentsView"/>
 
                     <Button Content="👥 Пользователи" 
-                        Style="{StaticResource NavButtonStyle}"
-                        Command="{Binding NavigateCommand}" 
-                        CommandParameter="UsersView"/>
+                            Style="{StaticResource NavButtonStyle}"
+                            Command="{Binding NavigateCommand}" 
+                            CommandParameter="UsersView"/>
                 </StackPanel>
             </Border>
 
-            <!-- Content Area -->
-            <ContentControl Grid.Column="1" 
-                        Content="{Binding CurrentView}"
-                        Margin="10"/>
+            <!-- Content Area with DataGrid -->
+            <Grid Grid.Column="1" Margin="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Toolbar -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0 0 0 10">
+                    <Button Content="Обновить" 
+                            Command="{Binding RefreshCommand}"
+                            Padding="10 5"
+                            Margin="0 0 10 0"/>
+                    <Button Content="Добавить" 
+                            Command="{Binding AddCommand}"
+                            Padding="10 5"
+                            Margin="0 0 10 0"/>
+                    <Button Content="Удалить" 
+                            Command="{Binding DeleteCommand}"
+                            IsEnabled="{Binding IsRowSelected}"
+                            Padding="10 5"
+                            Margin="0 0 10 0"/>
+                    <Button Content="Сохранить" 
+                            Command="{Binding SaveCommand}"
+                            Padding="10 5"
+                            Margin="0 0 10 0"/>
+                    <Button Content="Импорт JSON" 
+        Command="{Binding ImportFromJsonCommand}"
+        Padding="10 5"
+        Margin="0 0 10 0"/>
+                    <Button Content="Экспорт в JSON" 
+                            Command="{Binding ExportToJsonCommand}"
+                            Padding="10 5"/>
+                </StackPanel>
+
+                <!-- DataGrid -->
+                <DataGrid Grid.Row="1" 
+                          ItemsSource="{Binding CurrentTable}"
+                          SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                          Style="{StaticResource DataGridStyle}"
+                          ContextMenu="{StaticResource DataGridContextMenu}"/>
+            </Grid>
         </Grid>
 
         <!-- Status Bar -->
@@ -98,8 +231,8 @@
             <Separator/>
             <StatusBarItem>
                 <Button Content="Выход" 
-                    Style="{StaticResource LinkButtonStyle}"
-                    Command="{Binding LogoutCommand}"/>
+                        Style="{StaticResource LinkButtonStyle}"
+                        Command="{Binding LogoutCommand}"/>
             </StatusBarItem>
         </StatusBar>
     </Grid>
