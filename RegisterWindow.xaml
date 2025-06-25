@@ -1,0 +1,73 @@
+﻿<Window x:Class="WarehouseMaster.RegisterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Регистрация"
+        Height="650"
+        Width="800"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#FFF0F0F0">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#FF2C3E50" Padding="15">
+            <TextBlock Text="РЕГИСТРАЦИЯ" Foreground="White"
+                       FontSize="20" FontWeight="Bold"
+                       HorizontalAlignment="Center"/>
+        </Border>
+
+        <!-- Registration Form -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <Border Margin="50" Padding="20" Background="White" CornerRadius="5">
+                <StackPanel>
+                    <TextBlock Text="Создание учетной записи"
+                               FontSize="18" FontWeight="Bold"
+                               Margin="0,0,0,20"
+                               HorizontalAlignment="Center"/>
+
+                    <TextBlock Text="Полное имя"/>
+                    <TextBox x:Name="FullNameTextBox" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Телефон"/>
+                    <TextBox x:Name="PhoneTextBox" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Email"/>
+                    <TextBox x:Name="EmailTextBox" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Имя пользователя"/>
+                    <TextBox x:Name="UsernameTextBox" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Пароль"/>
+                    <PasswordBox x:Name="PasswordBox" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Подтверждение пароля"/>
+                    <PasswordBox x:Name="ConfirmPasswordBox" Margin="0,5,0,10"/>
+
+                    <TextBlock Text="Роль"/>
+                    <ComboBox x:Name="RoleComboBox" Margin="0,5,0,10" SelectedIndex="0">
+                        <ComboBoxItem Content="Администратор" Tag="1"/>
+                        <ComboBoxItem Content="Сотрудник" Tag="2"/>
+                    </ComboBox>
+
+                    <!-- Кнопки -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,30,0,0">
+                        <Button Content="Зарегистрироваться" Width="200" Click="RegisterButton_Click"/>
+                        <Button Content="Отмена" Width="100" Margin="15,0,0,0" Click="CancelButton_Click"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Уже есть аккаунт? Войти"
+                               HorizontalAlignment="Center"
+                               Margin="0,15,0,0"
+                               Foreground="Blue"
+                               Cursor="Hand"
+                               MouseLeftButtonUp="NavigateToLogin_Click"/>
+                </StackPanel>
+            </Border>
+        </ScrollViewer>
+    </Grid>
+</Window>
