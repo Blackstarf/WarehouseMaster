@@ -250,6 +250,7 @@ namespace WarehouseMaster
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+        // В методе SaveChanges:
         private void SaveChanges()
         {
             if (CurrentTable == null || string.IsNullOrEmpty(_currentTableName))
@@ -258,6 +259,7 @@ namespace WarehouseMaster
             try
             {
                 _repository.Update(CurrentTable, _currentTableName);
+                CurrentTable.AcceptChanges(); // <--- ВАЖНО: фиксируем изменения
                 MessageBox.Show("Изменения успешно сохранены", "Успех",
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshData();
@@ -268,6 +270,7 @@ namespace WarehouseMaster
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
         private string GetTableQuery(string viewName)
         {
             return viewName switch
