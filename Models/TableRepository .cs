@@ -127,6 +127,31 @@ namespace WarehouseMaster
                 }
             }
         }
+        public DataTable GetRaw(string tableName)
+        {
+            var dataTable = new DataTable();
+
+            try
+            {
+                using (var connection = new NpgsqlConnection(_connectionString))
+                {
+                    connection.Open();
+                    string query = $"SELECT * FROM {tableName}";
+                    using (var cmd = new NpgsqlCommand(query, connection))
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        dataTable.Load(reader);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при получении данных для сохранения: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+
+            return dataTable;
+        }
+
         private string GetJoinedQuery(string tableName)
         {
             return tableName.ToLower() switch

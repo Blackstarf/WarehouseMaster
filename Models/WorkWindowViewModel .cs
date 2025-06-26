@@ -250,7 +250,6 @@ namespace WarehouseMaster
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-        // В методе SaveChanges:
         private void SaveChanges()
         {
             if (CurrentTable == null || string.IsNullOrEmpty(_currentTableName))
@@ -258,18 +257,64 @@ namespace WarehouseMaster
 
             try
             {
-                _repository.Update(CurrentTable, _currentTableName);
-                CurrentTable.AcceptChanges(); // <--- ВАЖНО: фиксируем изменения
-                MessageBox.Show("Изменения успешно сохранены", "Успех",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
+                var realTable = _repository.GetRaw(_currentTableName);
+                var pkColumn = _repository.GetPrimaryKeyColumn(_currentTableName);
+
+                using var connection = new NpgsqlConnection(_connectionString);
+                connection.Open();
+
+                foreach (DataRow row in CurrentTable.Rows)
+                {
+                    if (row.RowState != DataRowState.Modified)
+                        continue;
+
+                    var setClauses = new List<string>();
+                    var command = new NpgsqlCommand();
+                    command.Connection = connection;
+
+                    foreach (DataColumn column in realTable.Columns)
+                    {
+                        if (column.ColumnName.Equals(pkColumn, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        if (!CurrentTable.Columns.Contains(column.ColumnName))
+                            continue;
+
+                        // только если поле действительно изменено
+                        if (row[column.ColumnName, DataRowVersion.Current]?.ToString() !=
+                            row[column.ColumnName, DataRowVersion.Original]?.ToString())
+                        {
+                            var paramName = $"@{column.ColumnName}";
+                            setClauses.Add($"{column.ColumnName} = {paramName}");
+                            command.Parameters.AddWithValue(paramName, row[column.ColumnName]);
+                        }
+                    }
+
+                    if (setClauses.Count == 0)
+                        continue;
+
+                    command.CommandText = $@"
+                UPDATE {_currentTableName}
+                SET {string.Join(", ", setClauses)}
+                WHERE {pkColumn} = @id";
+                    command.Parameters.AddWithValue("@id", row[pkColumn]);
+
+                    command.ExecuteNonQuery();
+                }
+
+                CurrentTable.AcceptChanges();
+                MessageBox.Show("Изменения успешно сохранены", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshData();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка при сохранении изменений: {ex.Message}", "Ошибка",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка при сохранении: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+
+
+
 
         private string GetTableQuery(string viewName)
         {

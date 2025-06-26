@@ -25,6 +25,7 @@ namespace WarehouseMaster.Core
     public interface ITableRepository
     {
         DataTable GetAll(string tableName);
+        DataTable GetRaw(string tableName);
         void Update(DataTable dataTable, string tableName);
         void Delete(int id, string tableName);
         string GetPrimaryKeyColumn(string tableName);
